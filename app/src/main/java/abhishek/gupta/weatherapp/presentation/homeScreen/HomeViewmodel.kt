@@ -90,8 +90,8 @@ class HomeViewmodel @Inject constructor(
     }
 
     init {
-        getWeatherData()
         getSuggestedCities()
+        getWeatherData()
         viewModelScope.launch(Dispatchers.IO) {
             mainDao.getLocalCityNames().collect { weatherList ->
                 _localizedCityName.value = weatherList
@@ -182,6 +182,8 @@ class HomeViewmodel @Inject constructor(
                                             DayData = forecastData.toEntityList()
                                         )
                                     )
+
+//                                    addLocalCityNames(weather.cityName)
                                 }
 
 
@@ -228,7 +230,7 @@ class HomeViewmodel @Inject constructor(
 
     @OptIn(FlowPreview::class)
     fun getSuggestedCities() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             _query.debounce(500.milliseconds)
                 .filter {
                     it.isNotBlank()
@@ -338,7 +340,7 @@ class HomeViewmodel @Inject constructor(
 
             if (lickedCity.contains(city)) {
 
-                onResult(false, "Already Licked This City")
+                onResult(false, "Already Cached This City")
             } else {
 
                 userRef.update("lickedCity", FieldValue.arrayUnion(city)).addOnSuccessListener {

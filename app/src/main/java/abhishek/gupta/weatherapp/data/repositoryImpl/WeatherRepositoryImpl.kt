@@ -126,21 +126,13 @@ class WeatherRepositoryImpl(
         cityName: String,
         apiKey: String,
     ): List<DomainSuggestedCity> {
-        val TAG = "GeoapifyRepository"
+
+        if (cityName.length < 4) return emptyList()
 
         return try {
-            Log.d(TAG, "Searching city: $cityName")
-
             val response = geoapifyApiService.getCitySuggestion(city = cityName, apiKey = apiKey)
-
-
-            Log.d(TAG, "Response: ${response.toDomainSuggestedCity()}")
-
             response.toDomainSuggestedCity()
-
-
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching city suggestions", e)
             emptyList()
         }
     }

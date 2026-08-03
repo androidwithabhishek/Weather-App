@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
@@ -48,9 +49,9 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installSplashScreen()
         enableEdgeToEdge()
         setContent {
-
             WeatherAppTheme {
 val homeViewmodel: HomeViewmodel = hiltViewModel()
                 val nvaController = rememberNavController()
@@ -60,7 +61,6 @@ val homeViewmodel: HomeViewmodel = hiltViewModel()
                 var showStatusBar by remember { mutableStateOf(false) }
 
                 LaunchedEffect(key1 = status) {
-
                     when (status) {
                         NetworkStatus.Connected -> {
                             message = "Connected To Internet"

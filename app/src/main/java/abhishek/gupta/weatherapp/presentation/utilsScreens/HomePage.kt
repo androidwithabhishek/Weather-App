@@ -181,32 +181,30 @@ fun HomePage(
 
             }
 
-            AnimatedVisibility(visible = isSuggestionChipsVisible) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            AnimatedVisibility(
+                visible = isSuggestionChipsVisible
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    items(localizedCityNames) { weather ->
-
-                        SuggestionChip(
-                            onClick = {
-
-                                query = weather.cityName
-
-                                homeViewmodel.updateQuery(query)
-
-                                keyBoardController?.hide()
-
-                                focusManager.clearFocus()
-
-                            },
-                            label = {
-
-                                Text(weather.cityName)
-
-                            }
-                        )
-
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(localizedCityNames) { weather ->
+                            SuggestionChip(
+                                onClick = {
+                                    query = weather.cityName
+                                    homeViewmodel.updateQuery(query)
+                                    keyBoardController?.hide()
+                                    focusManager.clearFocus()
+                                },
+                                label = {
+                                    Text(weather.cityName)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -241,19 +239,14 @@ fun HomePage(
                                 homeViewmodel.addLocalCityNames(city.city)
                                 isSearchBarActive = false
                                 focusManager.clearFocus()
+
                             }
                         )
 
                         HorizontalDivider()
-
-
-
-
-
                     }
                 }
             }
-
 
             Spacer(modifier = Modifier.height(23.dp))
 
