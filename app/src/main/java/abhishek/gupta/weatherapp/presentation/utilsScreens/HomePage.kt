@@ -15,6 +15,12 @@ import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,6 +73,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -82,6 +89,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -96,6 +105,65 @@ import androidx.navigation.NavController
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
+/**
+ * Modernized weather condition -> (icon, accent color, gradient) mapping.
+ * Centralized so the gradient background of the main card and icon tint
+ * always stay in sync.
+ */
+private data class WeatherVisual(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val accent: Color,
+    val gradient: List<Color>,
+)
+
+private fun weatherVisualFor(iconCode: String?): WeatherVisual = when (iconCode) {
+    "01d", "01n" -> WeatherVisual(
+        Icons.Default.WbSunny,
+        Color(0xFFFB8C00),
+        listOf(Color(0xFFFFCA5C), Color(0xFFFB8C00))
+    )
+    "02d", "02n" -> WeatherVisual(
+        Icons.Default.CloudQueue,
+        Color(0xFF78909C),
+        listOf(Color(0xFF90A4AE), Color(0xFF607D8B))
+    )
+
+    "03d", "03n", "04d", "04n" -> WeatherVisual(
+        Icons.Default.Cloud,
+        Color(0xFF78909C),
+        listOf(Color(0xFF9E9E9E), Color(0xFF616161))
+    )
+
+    "09d", "09n", "10d", "10n" -> WeatherVisual(
+        Icons.Default.Grain,
+        Color(0xFF42A5F5),
+        listOf(Color(0xFF64B5F6), Color(0xFF1E88E5))
+    )
+
+    "11d", "11n" -> WeatherVisual(
+        Icons.Default.FlashOn,
+        Color(0xFFFF7043),
+        listOf(Color(0xFFFF8A65), Color(0xFFE64A19))
+    )
+
+    "13d", "13n" -> WeatherVisual(
+        Icons.Default.AcUnit,
+        Color(0xFF26C6DA),
+        listOf(Color(0xFF4DD0E1), Color(0xFF00838F))
+    )
+
+    "50d", "50n" -> WeatherVisual(
+        Icons.Default.FilterDrama,
+        Color(0xFF90A4AE),
+        listOf(Color(0xFFB0BEC5), Color(0xFF78909C))
+    )
+
+    else -> WeatherVisual(
+        Icons.Default.HelpOutline,
+        Color(0xFF9E9E9E),
+        listOf(Color(0xFFBDBDBD), Color(0xFF757575))
+    )
+}
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,10 +187,8 @@ fun HomePage(
         homeViewmodel.networkStatus.collectAsState().value == NetworkStatus.Connected
     val currentTime = LocalTime.now()
 
-
     val localWeatherData by homeViewmodel.localWeatherData.collectAsStateWithLifecycle()
     val localizedCityNames by homeViewmodel.localizedCityNames.collectAsStateWithLifecycle()
-
 
     val error by homeViewmodel.onError.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
@@ -131,19 +197,32 @@ fun HomePage(
     val keyBoardController = LocalSoftwareKeyboardController.current
     var isSearchBarActive by remember { mutableStateOf(false) }
 
+    // Background gradient reacts to the current condition for a livelier feel.
+    val backgroundGradient = Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+            MaterialTheme.colorScheme.background
+        )
+    )
+
+    // --- Hourly forecast row ---
+    val hourlyWeather by homeViewmodel.localForecastData.collectAsState()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(backgroundGradient)
             .padding(16.dp),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             SearchBar(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .focusRequester(focusRequester)
+                    .clip(RoundedCornerShape(28.dp))
                     .onFocusChanged {
                         isSuggestionChipsVisible = it.isFocused
                         isSearchBarActive = it.isFocused
@@ -157,39 +236,52 @@ fun HomePage(
                     homeViewmodel.updateQuery(query)
                     keyBoardController?.hide()
                     focusManager.clearFocus()
-
                 },
                 active = false,
                 onActiveChange = {},
-                placeholder = { Text("Search") },
+                placeholder = {
+                    Text("Search for a city", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
                 trailingIcon = {
-                    IconButton(onClick = {
-                        if (query.isNotEmpty()) {
+                    AnimatedVisibility(visible = query.isNotEmpty()) {
+                        IconButton(onClick = {
                             query = ""
+                            homeViewmodel.updateQuery(query)
                             focusManager.clearFocus()
-                        } else {
-                            focusManager.clearFocus()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    }) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = "close")
                     }
-
                 },
                 leadingIcon = {
-                    Icon(imageVector = Icons.Default.Search, contentDescription = "search")
-                }) {
-
-            }
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                colors = androidx.compose.material3.SearchBarDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                )
+            ) {}
 
             AnimatedVisibility(
-                visible = isSuggestionChipsVisible
+                visible = isSuggestionChipsVisible,
+                enter = fadeIn(tween(200)) + expandVertically(),
+                exit = fadeOut(tween(150)) + shrinkVertically()
             ) {
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     LazyRow(
-                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(localizedCityNames) { weather ->
@@ -200,384 +292,363 @@ fun HomePage(
                                     keyBoardController?.hide()
                                     focusManager.clearFocus()
                                 },
-                                label = {
-                                    Text(weather.cityName)
-                                }
+                                label = { Text(weather.cityName) },
+                                shape = RoundedCornerShape(50),
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    labelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                ),
+                                border = null
                             )
                         }
                     }
                 }
             }
 
-
             val suggestedCities by homeViewmodel.suggestedCities.collectAsStateWithLifecycle()
 
             AnimatedVisibility(
-                visible = isSearchBarActive
+                visible = isSearchBarActive,
+                enter = fadeIn(tween(200)) + expandVertically(),
+                exit = fadeOut(tween(150)) + shrinkVertically()
             ) {
-                LazyColumn(
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 3.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight()
-                        .heightIn(max = 300.dp)
+                        .padding(top = 10.dp)
                 ) {
-                    items(suggestedCities) { city ->
-
-                        ListItem(
-                            headlineContent = {
-                                Text(city.city)
-                            },
-                            supportingContent = {
-                                Text("${city.formatted}")
-                            },
-                            leadingContent = {
-                                Icon(Icons.Default.LocationOn, null)
-                            },
-                            modifier = Modifier.clickable {
-                                query = city.city
-                                homeViewmodel.updateQuery(city.city)
-                                homeViewmodel.addLocalCityNames(city.city)
-                                isSearchBarActive = false
-                                focusManager.clearFocus()
-
-                            }
-                        )
-
-                        HorizontalDivider()
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                    ) {
+                        items(suggestedCities) { city ->
+                            ListItem(
+                                headlineContent = {
+                                    Text(city.city, fontWeight = FontWeight.Medium)
+                                },
+                                supportingContent = {
+                                    Text(
+                                        "${city.formatted}",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                leadingContent = {
+                                    Icon(
+                                        Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                colors = androidx.compose.material3.ListItemDefaults.colors(
+                                    containerColor = Color.Transparent
+                                ),
+                                modifier = Modifier.clickable {
+                                    query = city.city
+                                    homeViewmodel.updateQuery(city.city)
+                                    homeViewmodel.addLocalCityNames(city.city)
+                                    isSearchBarActive = false
+                                    focusManager.clearFocus()
+                                }
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(23.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             localWeatherData?.let { weatherData ->
+                val visual = weatherVisualFor(weatherData.icon)
+
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Column {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp)
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(bottom = 90.dp)
+                    ) {
+                        // --- Hero weather card ---
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(28.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
                             ) {
-
-
-                                if (!isNetworkAvailable) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-
-                                                val intent =
-                                                    Intent(Settings.ACTION_WIRELESS_SETTINGS)
-                                                context.startActivity(intent)
-                                            }
-                                            .padding(vertical = 8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.WifiOff,
-                                            contentDescription = "No Internet",
-                                            tint = Color.Red.copy(alpha = 0.8f),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Connect to Internet",
-                                            color = Color.Red.copy(alpha = 0.9f),
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                }
-
-                                Row(
-                                    horizontalArrangement = Arrangement.End,
-                                    verticalAlignment = Alignment.CenterVertically,
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(bottom = 16.dp, end = 16.dp)
+                                        .background(
+                                            Brush.linearGradient(
+                                                colors = visual.gradient,
+                                                start = Offset(0f, 0f),
+                                                end = Offset(1000f, 1000f)
+                                            )
+                                        )
+                                        .padding(24.dp)
                                 ) {
-                                    when {
-                                        onSearch -> {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                modifier = Modifier.padding(8.dp)
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    color = Color.Black,
-                                                    strokeWidth = 2.dp,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                                Text(
-                                                    text = "Searching...",
-                                                    style = MaterialTheme.typography.headlineSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 22.sp,
-                                                    color = Color.Black.copy(alpha = 0.8f)
-                                                )
+                                    Column {
+                                        if (!isNetworkAvailable) {
+                                            NoInternetBanner(
+                                                onClick = {
+                                                    context.startActivity(
+                                                        Intent(Settings.ACTION_WIRELESS_SETTINGS)
+                                                    )
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                        }
+
+                                        Row(
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp)
+                                        ) {
+                                            when {
+                                                onSearch -> {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(
+                                                            8.dp
+                                                        )
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            color = Color.White,
+                                                            strokeWidth = 2.dp,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Text(
+                                                            text = "Searching…",
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color.White
+                                                        )
+                                                    }
+                                                }
+
+                                                weatherData.cityName.isNullOrBlank() -> {
+                                                    Text(
+                                                        text = if (!error) "No city selected" else "Unknown",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color.White.copy(alpha = 0.9f)
+                                                    )
+                                                }
+
+                                                else -> {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.LocationOn,
+                                                            contentDescription = null,
+                                                            tint = Color.White.copy(alpha = 0.9f),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(
+                                                            text = weatherData.cityName,
+                                                            style = MaterialTheme.typography.titleLarge,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
 
-                                        weatherData.cityName.isNullOrBlank() -> {
-                                            if (!error) {
+                                        Icon(
+                                            imageVector = visual.icon,
+                                            contentDescription = "Weather Icon",
+                                            modifier = Modifier
+                                                .size(88.dp)
+                                                .align(Alignment.CenterHorizontally),
+                                            tint = Color.White
+                                        )
 
-                                                Text(
-                                                    text = "No city selected",
-                                                    style = MaterialTheme.typography.headlineSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 22.sp,
-                                                    color = Color.Black.copy(alpha = 0.8f)
-                                                )
-                                            } else {
-                                                Text(
-                                                    text = "Unknown",
-                                                    style = MaterialTheme.typography.headlineSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 22.sp,
-                                                    color = Color.Black.copy(alpha = 0.8f)
-                                                )
-                                            }
+                                        Spacer(modifier = Modifier.height(4.dp))
 
+                                        Text(
+                                            text = weatherData.condition,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = Color.White.copy(alpha = 0.9f),
+                                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                                        )
 
-                                        }
+                                        Text(
+                                            text = "${weatherData.temperature}°",
+                                            style = MaterialTheme.typography.displayLarge,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 64.sp,
+                                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                                            color = Color.White
+                                        )
 
-                                        else -> {
+                                        Spacer(modifier = Modifier.height(10.dp))
 
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                                        ) {
                                             Text(
-                                                text = weatherData.cityName,
-                                                style = MaterialTheme.typography.headlineSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 24.sp,
-                                                color = Color.Black
+                                                text = "Low: ${weatherData.temp_min}°",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = Color.White.copy(alpha = 0.85f)
+                                            )
+                                            Text(
+                                                text = "High: ${weatherData.temp_max}°",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = Color.White.copy(alpha = 0.85f)
                                             )
                                         }
                                     }
-
-
-                                }
-                                val (icon, tint) = when (weatherData.icon) {
-                                    "01d", "01n" -> Icons.Default.WbSunny to Color(0xFFFFD700)
-                                    "02d", "02n" -> Icons.Default.CloudQueue to Color.Gray
-                                    "03d", "03n", "04d", "04n" -> Icons.Default.Cloud to Color.Gray
-                                    "09d", "09n", "10d", "10n" -> Icons.Default.Grain to Color(
-                                        0xFF2196F3
-                                    )
-
-                                    "11d", "11n" -> Icons.Default.FlashOn to Color(0xFFFF5722)
-                                    "13d", "13n" -> Icons.Default.AcUnit to Color(0xFF00BCD4)
-                                    "50d", "50n" -> Icons.Default.FilterDrama to Color.Gray
-                                    else -> Icons.Default.HelpOutline to Color.Black
-                                }
-
-                                val conditionTextColor = when (weatherData.icon) {
-                                    "01d", "01n" -> Color(0xFFB8860B) // Dark Goldenrod
-                                    "02d", "02n" -> Color(0xFF616161) // Dark Gray
-                                    "03d", "03n", "04d", "04n" -> Color(0xFF424242) // Darker Gray
-                                    "09d", "09n", "10d", "10n" -> Color(0xFF1565C0) // Dark Blue
-                                    "11d", "11n" -> Color(0xFFD84315) // Dark Orange
-                                    "13d", "13n" -> Color(0xFF00838F) // Dark Cyan
-                                    "50d", "50n" -> Color(0xFF616161) // Dark Gray
-                                    else -> Color.Black
-                                }
-
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = "Weather Icon",
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .align(Alignment.CenterHorizontally),
-                                    tint = tint
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Text(
-                                    text = weatherData.condition,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                                    color = conditionTextColor,
-                                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                                )
-
-                                Text(
-                                    text = "${weatherData.temperature}°C",
-                                    style = MaterialTheme.typography.headlineLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 52.sp,
-                                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                                    color = Color.Black.copy(alpha = 0.9f)
-                                )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                                ) {
-                                    Text(
-                                        text = "Min: ${weatherData.temp_min}°C",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontSize = 18.sp
-                                        ),
-                                        color = Color(0xFF757575)
-                                    )
-                                    Text(
-                                        text = "Max: ${weatherData.temp_max}°C",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontSize = 18.sp
-                                        ),
-                                        color = Color(0xFF757575)
-                                    )
-                                }
-
-
-
-
-
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f))
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Details",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(bottom = 5.dp), color = Color.Black
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceEvenly
-                                ) {
-                                    WeatherDetailItem(
-                                        icon = Icons.Default.WaterDrop,
-                                        label = "Humidity",
-                                        value = "${weatherData.humidity}%"
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    WeatherDetailItem(
-                                        icon = Icons.Default.Compress,
-                                        label = "Pressure",
-                                        value = "${weatherData.pressure} hPa"
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    WeatherDetailItem(
-                                        icon = Icons.Default.Air,
-                                        label = "AQI",
-                                        value = aqiData?.aqi.toString()
-                                    )
-                                }
-                            }
-
-
-                        }
-
-                        Spacer(modifier = Modifier.height(1.dp))
-                        val hourlyWeather by homeViewmodel.localForecastData.collectAsState()
-
-                        hourlyWeather?.let {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                itemsIndexed(it.DayData) { index, hourly ->
-
-                                    Log.d("HomeViewModel", "WeatherData updated: ${hourly}")
-
-                                    val formatter = DateTimeFormatter.ofPattern("h a")
-                                    val time = currentTime.plusHours(index.toLong())
-                                    val formattedTime = time.format(formatter)
-                                    HourlyForecastItem(hourly, time = formattedTime)
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(17.dp))
-                        hourlyWeather?.let {
+
+                        // --- Details card ---
+                        item {
                             Card(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        navController.navigate(Routes.ForecastScreen(weatherData.cityName))
-                                    },
+                                    .fillMaxWidth(),
                                 shape = RoundedCornerShape(24.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                 ),
-                                elevation = CardDefaults.cardElevation(4.dp)
+                                elevation = CardDefaults.cardElevation(2.dp)
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 18.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .padding(horizontal = 20.dp, vertical = 18.dp)
                                 ) {
-
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Cloud,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier
-                                                .padding(12.dp)
-                                                .size(22.dp)
-                                        )
-                                    }
-
-                                    Spacer(Modifier.width(20.dp))
-
-                                    Column(
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = "View Forecast",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-
-                                        Text(
-                                            text = "Hourly & 7-day weather outlook for ${it.cityName}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
+                                    Text(
+                                        text = "Details",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 10.dp)
                                     )
+                                    androidx.compose.runtime.CompositionLocalProvider(
+                                        androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceEvenly
+                                        ) {
+                                            WeatherDetailItem(
+                                                icon = Icons.Default.WaterDrop,
+                                                label = "Humidity",
+                                                value = "${weatherData.humidity}%"
+                                            )
+                                            WeatherDetailItem(
+                                                icon = Icons.Default.Compress,
+                                                label = "Pressure",
+                                                value = "${weatherData.pressure} hPa"
+                                            )
+                                            WeatherDetailItem(
+                                                icon = Icons.Default.Air,
+                                                label = "AQI",
+                                                value = aqiData?.aqi.toString()
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+
+                        hourlyWeather?.let { forecast ->
+                            item {
+                                Column {
+                                    Text(
+                                        text = "Hourly Forecast",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                                    )
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        itemsIndexed(forecast.DayData) { index, hourly ->
+                                            Log.d("HomeViewModel", "WeatherData updated: $hourly")
+                                            val formatter = DateTimeFormatter.ofPattern("h a")
+                                            val time = currentTime.plusHours(index.toLong())
+                                            val formattedTime = time.format(formatter)
+                                            HourlyForecastItem(hourly, time = formattedTime)
+                                        }
+                                    }
                                 }
                             }
 
+                            // --- View forecast entry point ---
+                            item {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            navController.navigate(Routes.ForecastScreen(weatherData.cityName))
+                                        },
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                                    ),
+                                    elevation = CardDefaults.cardElevation(2.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 20.dp, vertical = 18.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Cloud,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier
+                                                    .padding(12.dp)
+                                                    .size(22.dp)
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(20.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "View Forecast",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "Hourly & 7-day weather outlook for ${forecast.cityName}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
                         }
-
                     }
 
-                    var isAdding by remember {
-                        mutableStateOf(false)
-                    }
+
+
+                    var isAdding by remember { mutableStateOf(false) }
 
                     FloatingActionButton(
                         onClick = {
@@ -585,210 +656,141 @@ fun HomePage(
                             homeViewmodel.addCity(
                                 weatherData.cityName,
                                 onResult = { condition, message ->
-
                                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                     isAdding = false
-
                                 })
                         },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(16.dp, vertical = 100.dp),
-                        containerColor = colorResource(id = R.color.app).copy(alpha = 0.85f)
+                            .padding(bottom = 62.dp, end = 16.dp    ),
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(
+                            6.dp
+                        )
                     ) {
                         if (isAdding) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(22.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.Black
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         } else {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add",
-                                tint = Color.Black
-                            )
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add city")
                         }
                     }
 
 
+
+
+
+
+
                 }
-
-
             } ?: run {
-                val sampleWeatherData = DomainCityWeatherResponse(
-                    cityName = "Search For City ",
-                    latitude = 0.000,
-                    longitude = -0.000,
-                    temperature = 00.0,
-                    temp_min = 00.0,
-                    temp_max = 00.0,
-                    condition = "Unknown",
-                    humidity = 0,
-                    pressure = 0,
-                    airQualityIndex = 0,
-                    icon = "",
-                    time = "",
-                    savedTime = 0L
-                )
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        if (!isNetworkAvailable) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-
-                                        val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS)
-                                        context.startActivity(intent)
-                                    }
-                                    .padding(vertical = 8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.WifiOff,
-                                    contentDescription = "No Internet",
-                                    tint = Color.Red.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Connect to Internet",
-                                    color = Color.Red.copy(alpha = 0.9f),
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.End,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp, end = 16.dp)
-                        ) {
-                            Text(
-                                text = sampleWeatherData.cityName,
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp,
-                                color = Color.Black.copy(alpha = 0.8f)
-                            )
-                        }
-
-
-                        Icon(
-                            imageVector = Icons.Default.HelpOutline, // question mark
-                            contentDescription = sampleWeatherData.condition,
-                            modifier = Modifier
-                                .size(80.dp)
-                                .align(Alignment.CenterHorizontally),
-                            tint = Color.Gray
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Unknown",
-                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                            color = Color(0xFF757575),
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-
-                        Text(
-                            text = "${sampleWeatherData.temperature}°C",
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 52.sp,
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            color = Color.Black.copy(alpha = 0.9f)
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(24.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text(
-                                text = "Min: ${sampleWeatherData.temp_min}°C",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontSize = 18.sp
-                                ),
-                                color = Color(0xFF757575)
-                            )
-                            Text(
-                                text = "Max: ${sampleWeatherData.temp_max}°C",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontSize = 18.sp
-                                ),
-                                color = Color(0xFF757575)
-                            )
-                        }
-
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-
-                    }
-                }
-
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Details",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black,
-                            modifier = Modifier.padding(bottom = 16.dp),
-
-                            )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            WeatherDetailItem(
-                                icon = Icons.Default.WaterDrop,
-                                label = "Humidity",
-                                value = "${sampleWeatherData.humidity}%"
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            WeatherDetailItem(
-                                icon = Icons.Default.Compress,
-                                label = "Pressure",
-                                value = "${sampleWeatherData.pressure} hPa"
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            WeatherDetailItem(
-                                icon = Icons.Default.Air,
-                                label = "AQI",
-                                value = sampleWeatherData.airQualityIndex.toString()
-                            )
-                        }
-                    }
-                }
+                EmptyStateContent(isNetworkAvailable = isNetworkAvailable, context = context)
             }
         }
 
 
-    }
 
+    }
+}
+
+@Composable
+private fun NoInternetBanner(onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color.Black.copy(alpha = 0.25f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(vertical = 10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.WifiOff,
+                contentDescription = "No Internet",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Connect to Internet",
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            )
+        }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Composable
+private fun EmptyStateContent(isNetworkAvailable: Boolean, context: android.content.Context) {
+    val sampleWeatherData = DomainCityWeatherResponse(
+        cityName = "Search for a city",
+        latitude = 0.000,
+        longitude = -0.000,
+        temperature = 0.0,
+        temp_min = 0.0,
+        temp_max = 0.0,
+        condition = "Unknown",
+        humidity = 0,
+        pressure = 0,
+        airQualityIndex = 0,
+        icon = "",
+        time = "",
+        savedTime = 0L
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (!isNetworkAvailable) {
+                NoInternetBanner(
+                    onClick = { context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS)) }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = sampleWeatherData.cityName,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Use the search bar above to check the weather anywhere",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+    }
 }

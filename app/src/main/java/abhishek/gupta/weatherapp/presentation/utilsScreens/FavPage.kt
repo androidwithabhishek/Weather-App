@@ -6,6 +6,7 @@ import abhishek.gupta.weatherapp.presentation.authScreens.AuthViewModel
 import abhishek.gupta.weatherapp.presentation.homeScreen.HomeViewmodel
 import abhishek.gupta.weatherapp.presentation.navigation.Routes
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +72,14 @@ fun FavPage(
     authViewModel: AuthViewModel,
     navController: NavController
 ) {
+
+    // Background gradient reacts to the current condition for a livelier feel.
+    val backgroundGradient = Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+            MaterialTheme.colorScheme.background
+        )
+    )
     val likedCities by homeViewModel.lickedCity.collectAsState()
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -93,76 +103,81 @@ fun FavPage(
                 title = {
                     Text(
                         "Cached Weather Data",modifier.padding(start = 6.dp),
-                        color = Color.Black,
+                        color =  MaterialTheme.colorScheme.onSurface,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = colorResource(id = R.color.app))
+                colors = TopAppBarDefaults.topAppBarColors (MaterialTheme.colorScheme.primaryContainer)
             )
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues = innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxSize().background(backgroundGradient).padding(innerPadding)
         ) {
-            if (likedCities.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator()
-                    } else {
-                        Text(
-                            text = "No cached cities data yet.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (likedCities.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator()
+                        } else {
+                            Text(
+                                text = "No cached cities data yet.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
                     }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                        state = listState
+                    ) {
+                        items(likedCities) { weatherEntity ->
+                            WeatherCard(
+                                weatherEntity = weatherEntity,
 
-                }
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp),
-                    state = listState
-                ) {
-                    items(likedCities) { weatherEntity ->
-                        WeatherCard(
-                            weatherEntity = weatherEntity,
+                                onDelete = { city ->
 
-                            onDelete = { city ->
+                                    homeViewModel.removeCity(city, onResult = { condition, message ->
 
-                                homeViewModel.removeCity(city, onResult = { condition, message ->
+                                        if (condition) {
+                                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                            homeViewModel.getLickedCity()
+                                        } else {
+                                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                        }
 
-                                    if (condition) {
-                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                        homeViewModel.getLickedCity()
-                                    } else {
-                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                    }
+                                    })
 
-                                })
+                                },
 
-                            },
+                                onClick = {
+                                    homeViewModel.updateQuery(it)
+                                    navController.navigate(Routes.HomeScreen)
+                                },
+                            )
+                        }
+                        item(1) {
+                            Spacer(modifier = Modifier.height(32.dp))
 
-                            onClick = {
-                                homeViewModel.updateQuery(it)
-                                navController.navigate(Routes.HomeScreen)
-                            },
-                        )
-                    }
-                    item(1) {
-                        Spacer(modifier = Modifier.height(32.dp))
-
+                        }
                     }
                 }
             }
         }
+
     }
 }
 
@@ -174,14 +189,24 @@ fun WeatherCard(
     onDelete: (city: String) -> Unit,
     onClick: (city: String) -> Unit,
 ) {
+
+    // Background gradient reacts to the current condition for a livelier feel.
+    val backgroundGradient = Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+            MaterialTheme.colorScheme.background
+        )
+    )
+
     Card(
         modifier = modifier
-            .fillMaxWidth().clickable{
-
-                onClick(weatherEntity.cityName)
-            }
-            .clip(RoundedCornerShape(12.dp)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(backgroundGradient)
+            .clickable { onClick(weatherEntity.cityName) },
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Transparent
+        ),
     ) {
         Row(
             modifier = Modifier
@@ -192,17 +217,14 @@ fun WeatherCard(
         ) {
 
             val (icon, tint) = when (weatherEntity.icon) {
-                "01d", "01n" -> Icons.Default.WbSunny to Color(0xFFFFD700)
-                "02d", "02n" -> Icons.Default.CloudQueue to Color.Gray
-                "03d", "03n", "04d", "04n" -> Icons.Default.Cloud to Color.Gray
-                "09d", "09n", "10d", "10n" -> Icons.Default.Grain to Color(
-                    0xFF2196F3
-                )
-
-                "11d", "11n" -> Icons.Default.FlashOn to Color(0xFFFF5722)
-                "13d", "13n" -> Icons.Default.AcUnit to Color(0xFF00BCD4)
-                "50d", "50n" -> Icons.Default.FilterDrama to Color.Gray
-                else -> Icons.Default.HelpOutline to Color.Black
+                "01d", "01n" -> Icons.Default.WbSunny to Color(0xFFFB8C00)
+                "02d", "02n" -> Icons.Default.CloudQueue to Color(0xFF78909C)
+                "03d", "03n", "04d", "04n" -> Icons.Default.Cloud to Color(0xFF78909C)
+                "09d", "09n", "10d", "10n" -> Icons.Default.Grain to Color(0xFF42A5F5)
+                "11d", "11n" -> Icons.Default.FlashOn to Color(0xFFFF7043)
+                "13d", "13n" -> Icons.Default.AcUnit to Color(0xFF26C6DA)
+                "50d", "50n" -> Icons.Default.FilterDrama to Color(0xFF90A4AE)
+                else -> Icons.Default.HelpOutline to MaterialTheme.colorScheme.onSurfaceVariant
             }
             Icon(
                 imageVector = icon,
@@ -219,7 +241,8 @@ fun WeatherCard(
                 Text(
                     text = weatherEntity.cityName,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = "${weatherEntity.temperature}°C",
@@ -234,20 +257,14 @@ fun WeatherCard(
                 )
             }
 
-
             Column(
                 modifier = Modifier
-                    .sizeIn(
-                        minWidth = 48.dp,
-                        minHeight = 48.dp
-                    ),
+                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 IconButton(
-                    onClick = {
-                        onDelete(weatherEntity.cityName)
-                    }
+                    onClick = { onDelete(weatherEntity.cityName) }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
@@ -256,13 +273,7 @@ fun WeatherCard(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-//                Text(
-//                    text = "Remove",
-//                    style = MaterialTheme.typography.labelSmall,
-//                    color = MaterialTheme.colorScheme.primary
-//                )
             }
-
         }
     }
 }

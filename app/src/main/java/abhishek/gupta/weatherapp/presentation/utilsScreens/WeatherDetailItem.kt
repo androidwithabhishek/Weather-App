@@ -28,7 +28,7 @@ fun WeatherDetailItem(
         "Humidity" -> Color(0xFF2196F3)
         "Pressure" -> Color(0xFF4CAF50)
         "AQI" -> Color(0xFFFF9800)
-        else -> Color.Black
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Column(
@@ -45,13 +45,13 @@ fun WeatherDetailItem(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            color = Color.Black
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = Color.Black.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
     }

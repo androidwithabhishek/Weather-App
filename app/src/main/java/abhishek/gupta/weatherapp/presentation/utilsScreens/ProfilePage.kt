@@ -249,7 +249,7 @@ fun ProfilePage(
     }
 
 
-    val appColor = colorResource(id = R.color.app)
+
     val dangerColor = Color(0xFFD64545)
     val cardShape = RoundedCornerShape(20.dp)
     val screenHPadding = 20.dp
@@ -263,12 +263,12 @@ fun ProfilePage(
                 title = {
                     Text(
                         "Profile", modifier.padding(start = 6.dp),
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = appColor)
+                colors = TopAppBarDefaults.topAppBarColors(MaterialTheme.colorScheme.primaryContainer)
             )
         }
     ) { innerPadding ->
@@ -396,7 +396,7 @@ fun ProfilePage(
                         .fillMaxWidth()
                         .height(150.dp)
                         .background(
-                            Brush.verticalGradient(listOf(appColor, appColor.copy(alpha = 0.75f)))
+                            MaterialTheme.colorScheme.primaryContainer
                         )
                 )
 
@@ -439,7 +439,7 @@ fun ProfilePage(
                                             .clip(CircleShape)
                                     )
                                     CircularProgressIndicator(
-                                        color = appColor,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
                                         strokeWidth = 2.dp,
                                         modifier = Modifier.size(32.dp)
                                     )
@@ -486,7 +486,7 @@ fun ProfilePage(
                             onClick = { openImagePicker() },
                             enabled = !isSavingImage,
                             modifier = Modifier.size(32.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = appColor)
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                         ) {
                             Icon(
                                 Icons.Default.PhotoCamera,
@@ -553,7 +553,7 @@ fun ProfilePage(
                                     Button(
                                         onClick = { saveName() },
                                         enabled = !isSavingName,
-                                        colors = ButtonDefaults.buttonColors(containerColor = appColor)
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                                     ) {
                                         if (isSavingName) {
                                             CircularProgressIndicator(

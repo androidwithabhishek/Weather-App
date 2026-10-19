@@ -1,5 +1,4 @@
 package abhishek.gupta.weatherapp.presentation.authScreens
-
 import abhishek.gupta.weatherapp.R
 import abhishek.gupta.weatherapp.presentation.navigation.Routes
 import androidx.compose.foundation.Image

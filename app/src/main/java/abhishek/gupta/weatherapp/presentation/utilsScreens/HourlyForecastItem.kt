@@ -41,7 +41,10 @@ fun HourlyForecastItem(hourly: EntityForecastData, time: String) {
             .width(80.dp)
             .padding(vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFFFF))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+        ),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(
             modifier = Modifier
@@ -50,17 +53,15 @@ fun HourlyForecastItem(hourly: EntityForecastData, time: String) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-
             Text(
                 text = time,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(8.dp))
-
 
             val (iconVector, iconTint) = when (hourly.icon) {
                 "01d", "01n" -> Icons.Default.WbSunny to Color(0xFFFFD54F)
@@ -86,7 +87,7 @@ fun HourlyForecastItem(hourly: EntityForecastData, time: String) {
                 text = "${hourly.temperature}°",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
